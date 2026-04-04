@@ -52,32 +52,28 @@ function GraphSVG({
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H}
       className="rounded-xl border border-slate-700 bg-slate-800 block">
-      <defs>
-        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-          <path d="M2 1L8 5L2 9" fill="none" stroke="#475569" strokeWidth="1.5" strokeLinecap="round" />
-        </marker>
-        <marker id="arrPath" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-          <path d="M2 1L8 5L2 9" fill="none" stroke="#378ADD" strokeWidth="1.5" strokeLinecap="round" />
-        </marker>
-      </defs>
 
       {edges.map((e, i) => {
         const a = nodes[e.from], b = nodes[e.to];
         if (!a || !b) return null;
-        const key = `${e.from}-${e.to}`;
-        const isPath = pathEdges.has(key);
+        // Une arête est dans le chemin si elle apparaît dans un sens ou l'autre
+        const isPath = pathEdges.has(`${e.from}-${e.to}`) || pathEdges.has(`${e.to}-${e.from}`);
         const dx = b.x - a.x, dy = b.y - a.y;
         const len = Math.sqrt(dx * dx + dy * dy);
         if (len === 0) return null;
         const ux = dx / len, uy = dy / len;
+        // Ligne simple sans flèche (arête non dirigée)
         const x1 = a.x + ux * R, y1 = a.y + uy * R;
-        const x2 = b.x - ux * (R + 4), y2 = b.y - uy * (R + 4);
+        const x2 = b.x - ux * R, y2 = b.y - uy * R;
         const mx = (x1 + x2) / 2 - uy * 14, my = (y1 + y2) / 2 + ux * 14;
         return (
           <g key={i}>
-            <path d={`M${x1},${y1} Q${mx},${my} ${x2},${y2}`} fill="none"
-              stroke={isPath ? "#378ADD" : "#475569"} strokeWidth={isPath ? 2.5 : 1}
-              markerEnd={`url(#${isPath ? "arrPath" : "arr"})`} />
+            <line
+              x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke={isPath ? "#378ADD" : "#475569"}
+              strokeWidth={isPath ? 2.5 : 1}
+              strokeLinecap="round"
+            />
             <text x={mx} y={my - 7} textAnchor="middle" fontSize={11} fill="#94a3b8" fontFamily="sans-serif">
               {e.weight}
             </text>
@@ -89,11 +85,11 @@ function GraphSVG({
         const isStart = n === startNode;
         const isEnd = n === endNode;
         const inPath = pathNodes.has(n);
-        
+
         let fill = "#3C3489";
         let stroke = "#AFA9EC";
         let textCol = "#CECBF6";
-        
+
         if (isStart) {
           fill = "#633806";
           stroke = "#EF9F27";
@@ -107,7 +103,7 @@ function GraphSVG({
           stroke = "#5DCAA5";
           textCol = "#9FE1CB";
         }
-        
+
         return (
           <g key={n} style={{ cursor: "grab" }}
             onMouseDown={(e) => onDragStart(e, n)}
@@ -167,6 +163,11 @@ export default function DijkstraMin() {
 
   function addEdge() {
     if (!fromNode || !toNode || fromNode === toNode || weight < 1) return;
+    // Éviter les doublons (A-B et B-A sont la même arête non dirigée)
+    const duplicate = edges.some(
+      (e) => (e.from === fromNode && e.to === toNode) || (e.from === toNode && e.to === fromNode)
+    );
+    if (duplicate) return;
     setEdges((p) => [...p, { from: fromNode, to: toNode, weight }]);
     clearResults();
   }
@@ -215,24 +216,24 @@ export default function DijkstraMin() {
       setPathEdges(new Set());
       return;
     }
-    
+
     const { dist, getPath } = dijkstra(nodeList, edges, startNode);
     const path = getPath(endNode);
-    
+
     if (path.length === 0 || dist[endNode] === Infinity) {
       setResult({ distance: Infinity, path: [] });
       setPathNodes(new Set());
       setPathEdges(new Set());
       return;
     }
-    
+
     const pEdges = new Set<string>();
     const pNodes = new Set<string>();
     for (let i = 0; i < path.length - 1; i++) {
       pEdges.add(`${path[i]}-${path[i + 1]}`);
     }
     path.forEach((node) => pNodes.add(node));
-    
+
     setPathEdges(pEdges);
     setPathNodes(pNodes);
     setResult({ distance: dist[endNode], path });
@@ -316,7 +317,8 @@ export default function DijkstraMin() {
               value={fromNode} onChange={(e) => setFromNode(e.target.value)}>
               {nodeList.map((n) => <option key={n}>{n}</option>)}
             </select>
-            <span className="text-slate-400 text-sm">→</span>
+            {/* Tiret à la place de la flèche → pour indiquer non-dirigé */}
+            <span className="text-slate-400 text-sm font-bold">—</span>
             <select className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
               value={toNode} onChange={(e) => setToNode(e.target.value)}>
               {nodeList.map((n) => <option key={n}>{n}</option>)}
@@ -329,7 +331,8 @@ export default function DijkstraMin() {
           <div className="flex flex-wrap gap-2 mt-2">
             {edges.map((e, i) => (
               <span key={i} className="bg-slate-700 px-3 py-1 rounded-full text-sm flex items-center gap-2">
-                {e.from}→{e.to}({e.weight})
+                {/* A-B(4) au lieu de A→B(4) */}
+                {e.from}-{e.to}({e.weight})
                 <button onClick={() => removeEdge(i)} className="text-red-400 hover:text-red-300">×</button>
               </span>
             ))}
@@ -375,7 +378,7 @@ export default function DijkstraMin() {
           <div className="flex justify-between items-center py-2 border-b border-slate-700">
             <span className="font-medium">Chemin :</span>
             <span className="text-slate-300 text-sm">
-              {result.path.length > 0 ? result.path.join(" → ") : "Aucun chemin trouvé"}
+              {result.path.length > 0 ? result.path.join(" — ") : "Aucun chemin trouvé"}
             </span>
           </div>
           <div className="flex justify-between items-center py-2">

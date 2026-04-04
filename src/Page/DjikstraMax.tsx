@@ -5,40 +5,46 @@ const W = 560, H = 320, R = 22;
 type NodeMap = Record<string, { x: number; y: number }>;
 type Edge = { from: string; to: string; weight: number };
 
-// Algorithme pour trouver le plus LONG chemin (Bellman-Ford modifié)
+// Construit un graphe d'adjacence (non-dirigé)
+function buildAdj(nodes: string[], edges: Edge[]) {
+  const adj: Record<string, { node: string; weight: number }[]> = {};
+  nodes.forEach((n) => { adj[n] = []; });
+  edges.forEach((e) => {
+    adj[e.from].push({ node: e.to, weight: e.weight });
+    adj[e.to].push({ node: e.from, weight: e.weight });
+  });
+  return adj;
+}
+
+// DFS exhaustif : explore tous les chemins simples et retourne le plus long
 function longestPath(nodes: string[], edges: Edge[], start: string, end: string) {
-  const dist: Record<string, number> = {};
-  const prev: Record<string, string | null> = {};
-  
-  nodes.forEach((n) => { dist[n] = -Infinity; prev[n] = null; });
-  dist[start] = 0;
-  
-  // Relaxation des arêtes (V-1 fois)
-  for (let i = 0; i < nodes.length - 1; i++) {
-    let updated = false;
-    edges.forEach((e) => {
-      if (dist[e.from] !== -Infinity && dist[e.from] + e.weight > dist[e.to]) {
-        dist[e.to] = dist[e.from] + e.weight;
-        prev[e.to] = e.from;
-        updated = true;
+  const adj = buildAdj(nodes, edges);
+  let bestDist = -Infinity;
+  let bestPath: string[] = [];
+
+  function dfs(cur: string, visited: Set<string>, path: string[], dist: number) {
+    if (cur === end) {
+      if (dist > bestDist) {
+        bestDist = dist;
+        bestPath = [...path];
       }
-      if (dist[e.to] !== -Infinity && dist[e.to] + e.weight > dist[e.from]) {
-        dist[e.from] = dist[e.to] + e.weight;
-        prev[e.from] = e.to;
-        updated = true;
+      return;
+    }
+    for (const { node, weight } of adj[cur]) {
+      if (!visited.has(node)) {
+        visited.add(node);
+        path.push(node);
+        dfs(node, visited, path, dist + weight);
+        path.pop();
+        visited.delete(node);
       }
-    });
-    if (!updated) break;
+    }
   }
-  
-  function getPath(node: string): string[] {
-    const path: string[] = [];
-    let cur: string | null = node;
-    while (cur !== null) { path.unshift(cur); cur = prev[cur]; }
-    return path.length > 1 || path[0] === start ? path : [];
-  }
-  
-  return { dist, getPath };
+
+  const visited = new Set<string>([start]);
+  dfs(start, visited, [start], 0);
+
+  return { dist: bestDist, path: bestPath };
 }
 
 function GraphSVG({
@@ -55,32 +61,28 @@ function GraphSVG({
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H}
       className="rounded-xl border border-slate-700 bg-slate-800 block">
-      <defs>
-        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-          <path d="M2 1L8 5L2 9" fill="none" stroke="#475569" strokeWidth="1.5" strokeLinecap="round" />
-        </marker>
-        <marker id="arrPath" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-          <path d="M2 1L8 5L2 9" fill="none" stroke="#F59E0B" strokeWidth="1.5" strokeLinecap="round" />
-        </marker>
-      </defs>
 
       {edges.map((e, i) => {
         const a = nodes[e.from], b = nodes[e.to];
         if (!a || !b) return null;
-        const key = `${e.from}-${e.to}`;
-        const isPath = pathEdges.has(key);
+        // Vérifie les deux sens (arête non-dirigée)
+        const isPath = pathEdges.has(`${e.from}-${e.to}`) || pathEdges.has(`${e.to}-${e.from}`);
         const dx = b.x - a.x, dy = b.y - a.y;
         const len = Math.sqrt(dx * dx + dy * dy);
         if (len === 0) return null;
         const ux = dx / len, uy = dy / len;
         const x1 = a.x + ux * R, y1 = a.y + uy * R;
-        const x2 = b.x - ux * (R + 4), y2 = b.y - uy * (R + 4);
+        const x2 = b.x - ux * R,  y2 = b.y - uy * R;
         const mx = (x1 + x2) / 2 - uy * 14, my = (y1 + y2) / 2 + ux * 14;
         return (
           <g key={i}>
-            <path d={`M${x1},${y1} Q${mx},${my} ${x2},${y2}`} fill="none"
-              stroke={isPath ? "#F59E0B" : "#475569"} strokeWidth={isPath ? 3 : 1.5}
-              markerEnd={`url(#${isPath ? "arrPath" : "arr"})`} />
+            {/* Ligne simple sans flèche = arête non-dirigée */}
+            <line
+              x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke={isPath ? "#F59E0B" : "#475569"}
+              strokeWidth={isPath ? 3 : 1.5}
+              strokeLinecap="round"
+            />
             <text x={mx} y={my - 7} textAnchor="middle" fontSize={11} fill="#94a3b8" fontFamily="sans-serif">
               {e.weight}
             </text>
@@ -90,32 +92,20 @@ function GraphSVG({
 
       {Object.entries(nodes).map(([n, pos]) => {
         const isStart = n === startNode;
-        const isEnd = n === endNode;
-        const inPath = pathNodes.has(n);
-        
-        let fill = "#3C3489";
-        let stroke = "#AFA9EC";
-        let textCol = "#CECBF6";
-        
-        if (isStart) {
-          fill = "#633806";
-          stroke = "#EF9F27";
-          textCol = "#FAC775";
-        } else if (isEnd) {
-          fill = "#4A1D6D";
-          stroke = "#F59E0B";
-          textCol = "#FDE68A";
-        } else if (inPath) {
-          fill = "#78350F";
-          stroke = "#F59E0B";
-          textCol = "#FDE68A";
-        }
-        
+        const isEnd   = n === endNode;
+        const inPath  = pathNodes.has(n);
+
+        let fill = "#3C3489", stroke = "#AFA9EC", textCol = "#CECBF6";
+        if (isStart)      { fill = "#633806"; stroke = "#EF9F27"; textCol = "#FAC775"; }
+        else if (isEnd)   { fill = "#4A1D6D"; stroke = "#F59E0B"; textCol = "#FDE68A"; }
+        else if (inPath)  { fill = "#78350F"; stroke = "#F59E0B"; textCol = "#FDE68A"; }
+
         return (
           <g key={n} style={{ cursor: "grab" }}
             onMouseDown={(e) => onDragStart(e, n)}
             onTouchStart={(e) => onDragStart(e, n)}>
-            <circle cx={pos.x} cy={pos.y} r={R} fill={fill} stroke={stroke} strokeWidth={(isStart || isEnd || inPath) ? 2.5 : 1.5} />
+            <circle cx={pos.x} cy={pos.y} r={R} fill={fill} stroke={stroke}
+              strokeWidth={(isStart || isEnd || inPath) ? 2.5 : 1.5} />
             <text x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="central"
               fontSize={13} fontWeight={500} fill={textCol} fontFamily="sans-serif">
               {n}
@@ -128,22 +118,22 @@ function GraphSVG({
 }
 
 export default function DijkstraMax() {
-  const [nodes, setNodes] = useState<NodeMap>({});
-  const [edges, setEdges] = useState<Edge[]>([]);
+  const [nodes, setNodes]       = useState<NodeMap>({});
+  const [edges, setEdges]       = useState<Edge[]>([]);
   const [nodeInput, setNodeInput] = useState("");
   const [fromNode, setFromNode] = useState("");
-  const [toNode, setToNode] = useState("");
-  const [weight, setWeight] = useState(1);
+  const [toNode,   setToNode]   = useState("");
+  const [weight,   setWeight]   = useState(1);
   const [startNode, setStartNode] = useState("");
-  const [endNode, setEndNode] = useState("");
+  const [endNode,   setEndNode]   = useState("");
   const [pathEdges, setPathEdges] = useState(new Set<string>());
   const [pathNodes, setPathNodes] = useState(new Set<string>());
-  const [result, setResult] = useState<{ distance: number; path: string[] } | null>(null);
+  const [result, setResult]     = useState<{ distance: number; path: string[] } | null>(null);
 
   const svgContainerRef = useRef<HTMLDivElement>(null);
-  const dragNodeRef = useRef<string | null>(null);
-  const dragOffRef = useRef({ ox: 0, oy: 0 });
-  const nodeList = Object.keys(nodes);
+  const dragNodeRef     = useRef<string | null>(null);
+  const dragOffRef      = useRef({ ox: 0, oy: 0 });
+  const nodeList        = Object.keys(nodes);
 
   function rndPos() {
     const angle = Math.random() * 2 * Math.PI;
@@ -157,9 +147,9 @@ export default function DijkstraMax() {
     setNodes((p) => ({ ...p, [v]: rndPos() }));
     setNodeInput("");
     if (!startNode) setStartNode(v);
-    if (!endNode) setEndNode(v);
-    if (!fromNode) setFromNode(v);
-    if (!toNode) setToNode(v);
+    if (!endNode)   setEndNode(v);
+    if (!fromNode)  setFromNode(v);
+    if (!toNode)    setToNode(v);
   }
 
   function removeNode(n: string) {
@@ -170,6 +160,11 @@ export default function DijkstraMax() {
 
   function addEdge() {
     if (!fromNode || !toNode || fromNode === toNode || weight < 1) return;
+    // Évite les doublons A-B / B-A
+    const dup = edges.some(
+      (e) => (e.from === fromNode && e.to === toNode) || (e.from === toNode && e.to === fromNode)
+    );
+    if (dup) return;
     setEdges((p) => [...p, { from: fromNode, to: toNode, weight }]);
     clearResults();
   }
@@ -218,27 +213,26 @@ export default function DijkstraMax() {
       setPathEdges(new Set());
       return;
     }
-    
-    const { dist, getPath } = longestPath(nodeList, edges, startNode, endNode);
-    const path = getPath(endNode);
-    
-    if (path.length === 0 || dist[endNode] === -Infinity) {
+
+    const { dist, path } = longestPath(nodeList, edges, startNode, endNode);
+
+    if (path.length === 0 || dist === -Infinity) {
       setResult({ distance: -Infinity, path: [] });
       setPathNodes(new Set());
       setPathEdges(new Set());
       return;
     }
-    
+
     const pEdges = new Set<string>();
     const pNodes = new Set<string>();
     for (let i = 0; i < path.length - 1; i++) {
       pEdges.add(`${path[i]}-${path[i + 1]}`);
     }
     path.forEach((node) => pNodes.add(node));
-    
+
     setPathEdges(pEdges);
     setPathNodes(pNodes);
-    setResult({ distance: dist[endNode], path });
+    setResult({ distance: dist, path });
   }
 
   const onDragStart = useCallback((e: React.MouseEvent | React.TouchEvent, n: string) => {
@@ -246,8 +240,7 @@ export default function DijkstraMax() {
     dragNodeRef.current = n;
     const svg = svgContainerRef.current?.querySelector("svg");
     if (!svg) return;
-    const bbox = svg.getBoundingClientRect();
-    const scale = W / bbox.width;
+    const scale = W / svg.getBoundingClientRect().width;
     const pt = "touches" in e
       ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
       : { x: e.clientX, y: e.clientY };
@@ -319,7 +312,8 @@ export default function DijkstraMax() {
               value={fromNode} onChange={(e) => setFromNode(e.target.value)}>
               {nodeList.map((n) => <option key={n}>{n}</option>)}
             </select>
-            <span className="text-slate-400 text-sm">→</span>
+            {/* Tiret = arête non-dirigée */}
+            <span className="text-slate-400 text-sm font-bold">—</span>
             <select className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
               value={toNode} onChange={(e) => setToNode(e.target.value)}>
               {nodeList.map((n) => <option key={n}>{n}</option>)}
@@ -332,7 +326,8 @@ export default function DijkstraMax() {
           <div className="flex flex-wrap gap-2 mt-2">
             {edges.map((e, i) => (
               <span key={i} className="bg-slate-700 px-3 py-1 rounded-full text-sm flex items-center gap-2">
-                {e.from}→{e.to}({e.weight})
+                {/* A-B(4) au lieu de A→B(4) */}
+                {e.from}-{e.to}({e.weight})
                 <button onClick={() => removeEdge(i)} className="text-red-400 hover:text-red-300">×</button>
               </span>
             ))}
@@ -373,12 +368,12 @@ export default function DijkstraMax() {
       {result && (
         <div className="bg-slate-800 rounded-xl border border-amber-700 p-4">
           <p className="text-xs text-amber-400 mb-3">
-            📍 Plus long chemin de <strong className="text-yellow-400">{startNode}</strong> à <strong className="text-amber-400">{endNode}</strong>
+            Plus long chemin de <strong className="text-yellow-400">{startNode}</strong> à <strong className="text-amber-400">{endNode}</strong>
           </p>
           <div className="flex justify-between items-center py-2 border-b border-slate-700">
             <span className="font-medium">Chemin :</span>
             <span className="text-slate-300 text-sm">
-              {result.path.length > 0 ? result.path.join(" → ") : "Aucun chemin trouvé"}
+              {result.path.length > 0 ? result.path.join(" — ") : "Aucun chemin trouvé"}
             </span>
           </div>
           <div className="flex justify-between items-center py-2">
