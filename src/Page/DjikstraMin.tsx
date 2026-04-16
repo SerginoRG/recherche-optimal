@@ -282,7 +282,7 @@ export default function DijkstraMin() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6 max-w-2xl mx-auto">
+    <div className="min-h-screen bg-slate-900 text-white p-6 max-w-2xl mt-[60px] mx-auto">
       <h1 className="text-2xl font-bold mb-6 text-blue-400">Dijkstra - Plus Court Chemin</h1>
 
       {/* Nœuds */}

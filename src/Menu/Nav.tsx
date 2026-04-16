@@ -144,7 +144,7 @@ function Nav() {
       </nav>
 
       {/* Espace pour compenser la navbar fixe */}
-      <div className="h-24"></div>
+   
 
       {/* Contenu principal */}
       <main className="min-h-screen from-gray-900 via-gray-800 to-gray-900">
