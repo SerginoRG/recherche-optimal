@@ -17,9 +17,9 @@ function App() {
         <Route path="/signup" element={<SigunUp />}/>
 
         <Route element={<Nav />}>
-        <Route path="/home" element={<PageHome />} />
-        <Route path="/min" element={<DjikstraMin />} />
-        <Route path="/max"  element={<DjikstraMax />}/>
+            <Route path="/home" element={<PageHome />} />
+            <Route path="/min" element={<DjikstraMin />} />
+            <Route path="/max"  element={<DjikstraMax />}/>
         </Route>
 
 

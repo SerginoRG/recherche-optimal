@@ -12,7 +12,6 @@ function PageHome() {
   const images = [img1, img2, img3, img4];
   const [index, setIndex] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
-  const [isHovering, setIsHovering] = useState(false);
 
   // Changer d'image toutes les 3 secondes
   useEffect(() => {
@@ -126,11 +125,7 @@ function PageHome() {
 
           {/* 🟥 IMAGE À DROITE AVEC CARROUSEL */}
           <div className="lg:w-1/2 flex justify-center">
-            <div 
-              className="relative group"
-              onMouseEnter={() => setIsHovering(true)}
-              onMouseLeave={() => setIsHovering(false)}
-            >
+            <div className="relative group">
               {/* Image principale */}
               <div className="relative overflow-hidden rounded-2xl shadow-2xl">
                 <img
